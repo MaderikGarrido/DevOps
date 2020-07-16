@@ -1,0 +1,19 @@
+# Template de Desarrollo
+# se aplica cuando el Temaplate Base lo invoca dependiendo del environment
+jobs:
+  - deployment: pruebas_desarrollo
+    pool:
+      vmImage: Ubuntu-16.04
+    environment: dev
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: Docker@2
+            displayName: 'build an image'
+            inputs:
+              command: BuildAndPush
+              azureSubscriptionEndpoint: 'Microsoft Azure Sponsorship(Converted to EA) (ce82852f-7159-458d-99d0-74d695c0a4a4)'
+              azureContainerRegistry: contianerregistrydemodays.azurecr.io
+              
+          

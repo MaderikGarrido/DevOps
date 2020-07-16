@@ -1,0 +1,68 @@
+# pipeline de trabajo en modo micro servicio, se divide el pipeline en varios mas 
+# y se invoca los otros pipeline dependiendo de la logica de las tareas.
+
+
+variables:
+- group: PipelineVar
+- name: dev
+  value: dev
+- name: qa
+  value: $(QAENV)
+stages:
+- stage: build
+  jobs:
+  - deployment: Build
+    condition: and(always(), eq(variables['dev'], 'dev'))
+    pool:
+      vmImage: 'Ubuntu-16.04'
+    environment: $(DEVENV)
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - script: git clone -b POC-intercoil https://$(USERNAME):$(token)@dev.azure.com/$(Organization)/$(project)/_git/$(repository)
+          - task: Docker@1
+            displayName: 'Build image'
+            inputs:
+              azureSubscriptionEndpoint: $(AzureSubcription)
+              azureContainerRegistry: contianerregistrydemodays.azurecr.io
+              dockerFile: $(System.DefaultWorkingDirectory)/$(project)/Dockerfile
+          - task: Docker@1
+            displayName: 'Push'
+            inputs:
+              azureSubscriptionEndpoint: $(AzureSubcription)
+              azureContainerRegistry: contianerregistrydemodays.azurecr.io
+              command: push
+          - script: sed -i 's/pipeline:/pipeline:$(Build.BuildId)/g' $(System.DefaultWorkingDirectory)/$(project)/nodejsapp.yaml
+          - script: cat $(System.DefaultWorkingDirectory)/$(project)/nodejsapp.yaml
+          - task: Kubernetes@1
+            displayName: 'kubectl apply'
+            inputs:
+              connectionType: 'Azure Resource Manager'
+              azureSubscriptionEndpoint: $(AzureSubcription)
+              azureResourceGroup: $(ResourceGroup)
+              kubernetesCluster: $(KubernetesCluster)
+              namespace: $(Namespaces)
+              command: apply
+              useConfigurationFile: true
+              configuration: $(System.DefaultWorkingDirectory)/$(project)/nodejsapp.yaml
+              azureSubscriptionEndpointForSecrets: $(AzureSubcription)
+              azureContainerRegistry: contianerregistrydemodays.azurecr.io
+              secretName: devopsdaysdev
+              versionSpec: 1.12.8
+  - ${{ if or(eq(variables['dev'], 'dev'), eq(variables['Agent.JobStatus'], 'Succeeded')) }}:
+      - template: Template_dev.yaml
+  - ${{ if or(eq(variables['qa'], 'qa'), eq(variables['Agent.JobStatus'], 'Succeeded')) }}:
+      - template: Template_qa.yaml
+- stage: release
+  jobs:
+  - deployment: echo_release
+    pool:
+      vmImage: 'Ubuntu-16.04'
+    environment: $(DEVENV)
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+           - script: echo Hola mundo Base Release
+           - script: echo Hola Mundo Base Release
